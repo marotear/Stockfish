@@ -886,9 +886,15 @@ moves_loop: // When in check search starts from here
       {
           Value rBeta = std::max(ttValue - 2 * depth / ONE_PLY, -VALUE_MATE);
           Depth d = (depth / (2 * ONE_PLY)) * ONE_PLY;
+          Move killer0 = ss->killers[0];
           ss->excludedMove = move;
           value = search<NonPV>(pos, ss, rBeta - 1, rBeta, d, cutNode, true);
           ss->excludedMove = MOVE_NONE;
+          if (killer0 && killer0 != ss->killers[0])
+          {
+             ss->killers[1] = ss->killers[0];
+             ss->killers[0] = killer0;
+          }
 
           if (value < rBeta)
               extension = ONE_PLY;
