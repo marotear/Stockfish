@@ -144,7 +144,8 @@ namespace {
   Value DrawValue[COLOR_NB];
 
   template <NodeType NT>
-  Value search(Position& pos, Stack* ss, Value alpha, Value beta, Depth depth, bool cutNode, bool skipEarlyPruning);
+  Value search(Position& pos, Stack* ss, Value alpha, Value beta, Depth depth, bool cutNode,
+               bool skipEarlyPruning, Move excludedMove);
 
   template <NodeType NT, bool InCheck>
   Value qsearch(Position& pos, Stack* ss, Value alpha, Value beta, Depth depth = DEPTH_ZERO);
@@ -396,7 +397,7 @@ void Thread::search() {
           // high/low anymore.
           while (true)
           {
-              bestValue = ::search<PV>(rootPos, ss, alpha, beta, rootDepth, false, false);
+              bestValue = ::search<PV>(rootPos, ss, alpha, beta, rootDepth, false, false, MOVE_NONE);
 
               // Bring the best move to the front. It is critical that sorting
               // is done with a stable algorithm because all the values but the
@@ -530,7 +531,8 @@ namespace {
   // search<>() is the main search function for both PV and non-PV nodes
 
   template <NodeType NT>
-  Value search(Position& pos, Stack* ss, Value alpha, Value beta, Depth depth, bool cutNode, bool skipEarlyPruning) {
+  Value search(Position& pos, Stack* ss, Value alpha, Value beta, Depth depth, bool cutNode,
+               bool skipEarlyPruning, Move excludedMove) {
 
     const bool PvNode = NT == PV;
     const bool rootNode = PvNode && (ss-1)->ply == 0;
@@ -545,7 +547,7 @@ namespace {
     StateInfo st;
     TTEntry* tte;
     Key posKey;
-    Move ttMove, move, excludedMove, bestMove;
+    Move ttMove, move, bestMove;
     Depth extension, newDepth;
     Value bestValue, value, ttValue, eval;
     bool ttHit, inCheck, givesCheck, singularExtensionNode, improving;
@@ -605,16 +607,13 @@ namespace {
 
     assert(0 <= ss->ply && ss->ply < MAX_PLY);
 
-    ss->currentMove = (ss+1)->excludedMove = bestMove = MOVE_NONE;
+    ss->currentMove = bestMove = MOVE_NONE;
     ss->counterMoves = &thisThread->counterMoveHistory[NO_PIECE][0];
     (ss+2)->killers[0] = (ss+2)->killers[1] = MOVE_NONE;
     Square prevSq = to_sq((ss-1)->currentMove);
 
-    // Step 4. Transposition table lookup. We don't want the score of a partial
-    // search to overwrite a previous full search TT value, so we use a different
-    // position key in case of an excluded move.
-    excludedMove = ss->excludedMove;
-    posKey = pos.key() ^ Key(excludedMove);
+    // Step 4. Transposition table lookup.
+    posKey = pos.key();
     tte = TT.probe(posKey, ttHit);
     ttValue = ttHit ? value_from_tt(tte->value(), ss->ply) : VALUE_NONE;
     ttMove =  rootNode ? thisThread->rootMoves[thisThread->PVIdx].pv[0]
@@ -625,6 +624,7 @@ namespace {
         && ttHit
         && tte->depth() >= depth
         && ttValue != VALUE_NONE // Possible in case of TT access race
+        && !excludedMove // Skip early TT cutoff for excludedMove
         && (ttValue >= beta ? (tte->bound() & BOUND_LOWER)
                             : (tte->bound() & BOUND_UPPER)))
     {
@@ -753,7 +753,7 @@ namespace {
 
         pos.do_null_move(st);
         Value nullValue = depth-R < ONE_PLY ? -qsearch<NonPV, false>(pos, ss+1, -beta, -beta+1)
-                                            : - search<NonPV>(pos, ss+1, -beta, -beta+1, depth-R, !cutNode, true);
+                                            : - search<NonPV>(pos, ss+1, -beta, -beta+1, depth-R, !cutNode, true, MOVE_NONE);
         pos.undo_null_move();
 
         if (nullValue >= beta)
@@ -767,7 +767,7 @@ namespace {
 
             // Do verification search at high depths
             Value v = depth-R < ONE_PLY ? qsearch<NonPV, false>(pos, ss, beta-1, beta)
-                                        :  search<NonPV>(pos, ss, beta-1, beta, depth-R, false, true);
+                                        :  search<NonPV>(pos, ss, beta-1, beta, depth-R, false, true, MOVE_NONE);
 
             if (v >= beta)
                 return nullValue;
@@ -796,7 +796,7 @@ namespace {
                 ss->counterMoves = &thisThread->counterMoveHistory[pos.moved_piece(move)][to_sq(move)];
 
                 pos.do_move(move, st);
-                value = -search<NonPV>(pos, ss+1, -rbeta, -rbeta+1, rdepth, !cutNode, false);
+                value = -search<NonPV>(pos, ss+1, -rbeta, -rbeta+1, rdepth, !cutNode, false, MOVE_NONE);
                 pos.undo_move(move);
                 if (value >= rbeta)
                     return value;
@@ -809,7 +809,7 @@ namespace {
         && (PvNode || ss->staticEval + 256 >= beta))
     {
         Depth d = (3 * depth / (4 * ONE_PLY) - 2) * ONE_PLY;
-        search<NT>(pos, ss, alpha, beta, d, cutNode, true);
+        search<NT>(pos, ss, alpha, beta, d, cutNode, true, MOVE_NONE);
 
         tte = TT.probe(posKey, ttHit);
         ttMove = ttHit ? tte->move() : MOVE_NONE;
@@ -821,7 +821,7 @@ moves_loop: // When in check search starts from here
     const CounterMoveStats& fmh = *(ss-2)->counterMoves;
     const CounterMoveStats& fm2 = *(ss-4)->counterMoves;
 
-    MovePicker mp(pos, ttMove, depth, ss);
+    MovePicker mp(pos, ttMove, depth, ss, excludedMove);
     value = bestValue; // Workaround a bogus 'uninitialized' warning under gcc
     improving =   ss->staticEval >= (ss-2)->staticEval
             /* || ss->staticEval == VALUE_NONE Already implicit in the previous condition */
@@ -841,9 +841,6 @@ moves_loop: // When in check search starts from here
     while ((move = mp.next_move(skipQuiets)) != MOVE_NONE)
     {
       assert(is_ok(move));
-
-      if (move == excludedMove)
-          continue;
 
       // At root obey the "searchmoves" option and skip moves not listed in Root
       // Move List. As a consequence any illegal move is also skipped. In MultiPV
@@ -886,9 +883,7 @@ moves_loop: // When in check search starts from here
       {
           Value rBeta = std::max(ttValue - 2 * depth / ONE_PLY, -VALUE_MATE);
           Depth d = (depth / (2 * ONE_PLY)) * ONE_PLY;
-          ss->excludedMove = move;
-          value = search<NonPV>(pos, ss, rBeta - 1, rBeta, d, cutNode, true);
-          ss->excludedMove = MOVE_NONE;
+          value = search<NonPV>(pos, ss, rBeta - 1, rBeta, d, cutNode, true, ttMove);
 
           if (value < rBeta)
               extension = ONE_PLY;
@@ -1002,7 +997,7 @@ moves_loop: // When in check search starts from here
 
           Depth d = std::max(newDepth - r, ONE_PLY);
 
-          value = -search<NonPV>(pos, ss+1, -(alpha+1), -alpha, d, true, false);
+          value = -search<NonPV>(pos, ss+1, -(alpha+1), -alpha, d, true, false, MOVE_NONE);
 
           doFullDepthSearch = (value > alpha && d != newDepth);
       }
@@ -1014,7 +1009,7 @@ moves_loop: // When in check search starts from here
           value = newDepth <   ONE_PLY ?
                             givesCheck ? -qsearch<NonPV,  true>(pos, ss+1, -(alpha+1), -alpha)
                                        : -qsearch<NonPV, false>(pos, ss+1, -(alpha+1), -alpha)
-                                       : - search<NonPV>(pos, ss+1, -(alpha+1), -alpha, newDepth, !cutNode, false);
+                                       : - search<NonPV>(pos, ss+1, -(alpha+1), -alpha, newDepth, !cutNode, false, MOVE_NONE);
 
       // For PV nodes only, do a full PV search on the first move or after a fail
       // high (in the latter case search only if value < beta), otherwise let the
@@ -1027,7 +1022,7 @@ moves_loop: // When in check search starts from here
           value = newDepth <   ONE_PLY ?
                             givesCheck ? -qsearch<PV,  true>(pos, ss+1, -beta, -alpha)
                                        : -qsearch<PV, false>(pos, ss+1, -beta, -alpha)
-                                       : - search<PV>(pos, ss+1, -beta, -alpha, newDepth, false, false);
+                                       : - search<PV>(pos, ss+1, -beta, -alpha, newDepth, false, false, MOVE_NONE);
       }
 
       // Step 17. Undo move

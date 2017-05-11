@@ -100,7 +100,7 @@ public:
 
   MovePicker(const Position&, Move, Value);
   MovePicker(const Position&, Move, Depth, Square);
-  MovePicker(const Position&, Move, Depth, Search::Stack*);
+  MovePicker(const Position&, Move, Depth, Search::Stack*, Move);
 
   Move next_move(bool skipQuiets = false);
 

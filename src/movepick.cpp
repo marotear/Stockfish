@@ -67,7 +67,7 @@ namespace {
 /// search captures, promotions, and some checks) and how important good move
 /// ordering is at the current node.
 
-MovePicker::MovePicker(const Position& p, Move ttm, Depth d, Search::Stack* s)
+MovePicker::MovePicker(const Position& p, Move ttm, Depth d, Search::Stack* s, Move excludedMove)
            : pos(p), ss(s), depth(d) {
 
   assert(d > DEPTH_ZERO);
@@ -78,8 +78,15 @@ MovePicker::MovePicker(const Position& p, Move ttm, Depth d, Search::Stack* s)
   killers[1] = ss->killers[1];
 
   stage = pos.checkers() ? EVASION : MAIN_SEARCH;
-  ttMove = ttm && pos.pseudo_legal(ttm) ? ttm : MOVE_NONE;
-  stage += (ttMove == MOVE_NONE);
+  if (excludedMove)
+  {
+      ++stage; // skip ttMove stage
+      // Set ttMove to excludedMove, in order to exclude it from move generation.
+      ttMove = excludedMove;
+  } else {
+      ttMove = ttm && pos.pseudo_legal(ttm) ? ttm : MOVE_NONE;
+      stage += (ttMove == MOVE_NONE);
+  }
 }
 
 MovePicker::MovePicker(const Position& p, Move ttm, Depth d, Square s)
