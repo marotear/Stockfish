@@ -435,6 +435,10 @@ void Thread::search() {
                       mainThread->failedLow = true;
                       Threads.stopOnPonderhit = false;
                   }
+
+                  Value value = ::search<NonPV>(rootPos, ss, alpha, alpha+1, rootDepth, false, true);
+                  if (value <= alpha)
+                      alpha = std::max(value - delta, -VALUE_INFINITE);
               }
               else if (bestValue >= beta)
                   beta = std::min(bestValue + delta, VALUE_INFINITE);
