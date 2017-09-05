@@ -68,11 +68,16 @@ namespace {
 
 /// MovePicker constructor for the main search
 MovePicker::MovePicker(const Position& p, Move ttm, Depth d, const ButterflyHistory* mh,
-                       const PieceToHistory** ch, Move cm, Move* killers_p)
-           : pos(p), mainHistory(mh), contHistory(ch), countermove(cm),
-             killers{killers_p[0], killers_p[1]}, depth(d){
+                       const PieceToHistory** ch, Move cm, Move* killers_p, Move* killers_p2)
+           : pos(p), mainHistory(mh), contHistory(ch), countermove(cm), depth(d){
 
   assert(d > DEPTH_ZERO);
+
+  if (!killers_p[0])
+      killers_p = killers_p2;
+
+  killers[0] = killers_p[0];
+  killers[1] = killers_p[1];
 
   stage = pos.checkers() ? EVASION : MAIN_SEARCH;
   ttMove = ttm && pos.pseudo_legal(ttm) ? ttm : MOVE_NONE;

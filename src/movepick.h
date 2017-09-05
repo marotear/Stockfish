@@ -95,7 +95,7 @@ public:
   MovePicker& operator=(const MovePicker&) = delete;
   MovePicker(const Position&, Move, Value);
   MovePicker(const Position&, Move, Depth, const ButterflyHistory*, Square);
-  MovePicker(const Position&, Move, Depth, const ButterflyHistory*, const PieceToHistory**, Move, Move*);
+  MovePicker(const Position&, Move, Depth, const ButterflyHistory*, const PieceToHistory**, Move, Move*, Move*);
   Move next_move(bool skipQuiets = false);
 
 private:
