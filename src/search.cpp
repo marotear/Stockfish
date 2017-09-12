@@ -588,6 +588,8 @@ namespace {
     ss->contHistory = &thisThread->contHistory[NO_PIECE][0];
     (ss+2)->killers[0] = (ss+2)->killers[1] = MOVE_NONE;
     Square prevSq = to_sq((ss-1)->currentMove);
+    if (PvNode && depth >= 4 * ONE_PLY)
+        (ss+1)->killers[0] = (ss+1)->killers[1] = MOVE_NONE;
 
     // Step 4. Transposition table lookup. We don't want the score of a partial
     // search to overwrite a previous full search TT value, so we use a different
