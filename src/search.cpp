@@ -59,6 +59,19 @@ using namespace Search;
 
 namespace {
 
+  int A1 = 4000;
+  int A2 = 4000;
+  int B1 = 0;
+  int B2 = 0;
+  int C1 = 20000;
+  int C2 = 20000;
+  int D1 = 0;
+  int D2 = 0;
+  int E1 = 20000;
+  int E2 = 20000;
+  TUNE(SetRange(10000, 30000), C1, C2, E1, E2);
+  TUNE(SetRange(-8000, 8000),  A1, A2, B1, B2, D1, D2);
+
   // Different node types, used as a template parameter
   enum NodeType { NonPV, PV };
 
@@ -981,7 +994,7 @@ moves_loop: // When in check search starts from here
                              + (*contHist[0])[movedPiece][to_sq(move)]
                              + (*contHist[1])[movedPiece][to_sq(move)]
                              + (*contHist[3])[movedPiece][to_sq(move)]
-                             - 4000;
+                             - (PvNode ? A1 : A2);
 
               // Decrease/increase reduction by comparing opponent's stat score
               if (ss->statScore >= 0 && (ss-1)->statScore < 0)
@@ -991,7 +1004,9 @@ moves_loop: // When in check search starts from here
                   r += ONE_PLY;
 
               // Decrease/increase reduction for moves with a good/bad history
-              r = std::max(DEPTH_ZERO, (r / ONE_PLY - ss->statScore / 20000) * ONE_PLY);
+              int score_r = ss->statScore > 0 ? (ss->statScore - (PvNode ? B1 : B2)) / (PvNode ? C1 : C2)
+                                              : (ss->statScore - (PvNode ? D1 : D2)) / (PvNode ? E1 : E2);
+              r = std::max(DEPTH_ZERO, (r / ONE_PLY - score_r) * ONE_PLY);
           }
 
           Depth d = std::max(newDepth - r, ONE_PLY);
