@@ -74,9 +74,14 @@ namespace {
   // Futility and reductions lookup tables, initialized at startup
   int FutilityMoveCounts[2][16]; // [improving][depth]
   int Reductions[2][2][64][64];  // [pv][improving][depth][moveNumber]
+  int ReductionsResidual[2][2][64][64];  // [pv][improving][depth][moveNumber]
 
   template <bool PvNode> Depth reduction(bool i, Depth d, int mn) {
     return Reductions[PvNode][i][std::min(d / ONE_PLY, 63)][std::min(mn, 63)] * ONE_PLY;
+  }
+
+  template <bool PvNode> int reductionResidual(bool i, Depth d, int mn) {
+    return ReductionsResidual[PvNode][i][std::min(d / ONE_PLY, 63)][std::min(mn, 63)] * ONE_PLY;
   }
 
   // History and stats update bonus, based on depth
@@ -191,6 +196,9 @@ void Search::init() {
 
               Reductions[NonPV][imp][d][mc] = int(std::round(r));
               Reductions[PV][imp][d][mc] = std::max(Reductions[NonPV][imp][d][mc] - 1, 0);
+
+              ReductionsResidual[NonPV][imp][d][mc] = int((r + 0.21 - std::round(r)) * 20000);
+              ReductionsResidual[PV][imp][d][mc]    = int((r + 0.19 - std::round(r)) * 20000);
 
               // Increase reduction for non-PV nodes when eval is not improving
               if (!imp && Reductions[NonPV][imp][d][mc] >= 2)
@@ -979,8 +987,7 @@ moves_loop: // When in check search starts from here
               ss->statScore =  thisThread->mainHistory[~pos.side_to_move()][from_to(move)]
                              + (*contHist[0])[movedPiece][to_sq(move)]
                              + (*contHist[1])[movedPiece][to_sq(move)]
-                             + (*contHist[3])[movedPiece][to_sq(move)]
-                             - 4000;
+                             + (*contHist[3])[movedPiece][to_sq(move)];
 
               // Decrease/increase reduction by comparing opponent's stat score
               if (ss->statScore >= 0 && (ss-1)->statScore < 0)
@@ -990,7 +997,8 @@ moves_loop: // When in check search starts from here
                   r += ONE_PLY;
 
               // Decrease/increase reduction for moves with a good/bad history
-              r = std::max(DEPTH_ZERO, (r / ONE_PLY - ss->statScore / 20000) * ONE_PLY);
+              int rStat = (reductionResidual<PvNode>(improving, depth, moveCount) - ss->statScore) / 20000;
+              r = std::max(DEPTH_ZERO, r + rStat * ONE_PLY);
           }
 
           Depth d = std::max(newDepth - r, ONE_PLY);
