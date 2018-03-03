@@ -666,7 +666,7 @@ namespace {
             && (tte->bound() & (ttValue > eval ? BOUND_LOWER : BOUND_UPPER)))
             eval = ttValue;
     }
-    else
+    else if (!excludedMove)
     {
         ss->staticEval = eval =
         (ss-1)->currentMove != MOVE_NULL ? evaluate(pos)
