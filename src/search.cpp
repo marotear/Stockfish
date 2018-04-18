@@ -302,6 +302,8 @@ void Thread::search() {
   for (int i = 4; i > 0; i--)
      (ss-i)->contHistory = this->contHistory[NO_PIECE][0].get(); // Use as sentinel
 
+  (ss-1)->statScore = -1;
+
   bestValue = delta = alpha = -VALUE_INFINITE;
   beta = VALUE_INFINITE;
 
