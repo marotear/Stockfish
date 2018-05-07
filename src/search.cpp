@@ -896,12 +896,19 @@ moves_loop: // When in check, search starts from here
           &&  pos.legal(move))
       {
           Value rBeta = std::max(ttValue - 2 * depth / ONE_PLY, -VALUE_MATE);
+          Move killer0 = ss->killers[0];
           ss->excludedMove = move;
           value = search<NonPV>(pos, ss, rBeta - 1, rBeta, depth / 2, cutNode, true);
           ss->excludedMove = MOVE_NONE;
 
           if (value < rBeta)
               extension = ONE_PLY;
+
+          if (ss->killers[0] != killer0)
+          {
+              ss->killers[1] = ss->killers[0];
+              ss->killers[0] = killer0;
+          }
       }
       else if (    givesCheck // Check extension (~2 Elo)
                && !moveCountPruning
