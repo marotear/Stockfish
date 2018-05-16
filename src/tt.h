@@ -42,6 +42,8 @@ struct TTEntry {
   Depth depth() const { return (Depth)(depth8 * int(ONE_PLY)); }
   Bound bound() const { return (Bound)(genBound8 & 0x3); }
 
+  void save_move(Move m) { move16 = (uint16_t)m; }
+
   void save(Key k, Value v, Bound b, Depth d, Move m, Value ev, uint8_t g) {
 
     assert(d / ONE_PLY * ONE_PLY == d);
