@@ -732,8 +732,8 @@ namespace {
             return v;
     }
 
-    improving =   ss->staticEval >= (ss-2)->staticEval
-               || (ss-2)->staticEval == VALUE_NONE;
+    improving = !excludedMove && (   ss->staticEval >= (ss-2)->staticEval
+                                  || (ss-2)->staticEval == VALUE_NONE    );
 
     // Step 8. Futility pruning: child node (~30 Elo)
     if (   !rootNode
