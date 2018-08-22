@@ -711,8 +711,11 @@ namespace {
     }
     else if (ttHit)
     {
+        if ((ss-1)->currentMove == MOVE_NULL)
+            eval = ss->staticEval = pureStaticEval = -(ss-1)->staticEval + 2 * Eval::Tempo;
+
         // Never assume anything on values stored in TT
-        if ((ss->staticEval = pureStaticEval = eval = tte->eval()) == VALUE_NONE)
+        else if ((ss->staticEval = pureStaticEval = eval = tte->eval()) == VALUE_NONE)
             eval = ss->staticEval = (pureStaticEval = evaluate(pos)) - 10 * ((ss-1)->statScore > 0);
 
         // Can ttValue be used as a better position evaluation?
