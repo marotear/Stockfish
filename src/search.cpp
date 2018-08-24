@@ -709,27 +709,23 @@ namespace {
         improving = false;
         goto moves_loop;  // Skip early pruning when in check
     }
-    else if (ttHit)
+    else
     {
-        // Never assume anything on values stored in TT
-        if ((ss->staticEval = pureStaticEval = eval = tte->eval()) == VALUE_NONE)
-            eval = ss->staticEval = (pureStaticEval = evaluate(pos)) - 10 * ((ss-1)->statScore > 0);
+        if ((ss-1)->currentMove == MOVE_NULL)
+            pureStaticEval = -(ss-1)->staticEval + 2 * Eval::Tempo;
+        else
+            pureStaticEval = ttHit && tte->eval() != VALUE_NONE ? tte->eval() : evaluate(pos);
+
+        int p = (ss-1)->statScore;
+        int malus = p > 0 ? (p + 5000) / 1024 :
+                    p < 0 ? (p - 5000) / 1024 : 0;
+
+        ss->staticEval = eval = pureStaticEval - malus;
 
         // Can ttValue be used as a better position evaluation?
         if (    ttValue != VALUE_NONE
             && (tte->bound() & (ttValue > eval ? BOUND_LOWER : BOUND_UPPER)))
             eval = ttValue;
-    }
-    else
-    {
-        int p = (ss-1)->statScore;
-        int malus = p > 0 ? (p + 5000) / 1024 :
-                    p < 0 ? (p - 5000) / 1024 : 0;
-
-        ss->staticEval = eval = (ss-1)->currentMove != MOVE_NULL ? (pureStaticEval = evaluate(pos)) - malus
-                                                                 : (pureStaticEval = -(ss-1)->staticEval + 2 * Eval::Tempo);
-
-        tte->save(posKey, VALUE_NONE, BOUND_NONE, DEPTH_NONE, MOVE_NONE, pureStaticEval);
     }
 
     // Step 7. Razoring (~2 Elo)
