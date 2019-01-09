@@ -944,8 +944,9 @@ moves_loop: // When in check, search starts from here
           &&  pos.legal(move))
       {
           Value singularBeta = std::max(ttValue - 2 * depth / ONE_PLY, -VALUE_MATE);
+          bool multiCut = cutNode && singularBeta > beta;
           ss->excludedMove = move;
-          value = search<NonPV>(pos, ss, singularBeta - 1, singularBeta, depth / 2, cutNode);
+          value = search<NonPV>(pos, ss, singularBeta - 1, singularBeta, depth / 2 + multiCut * ONE_PLY, cutNode);
           ss->excludedMove = MOVE_NONE;
 
           if (value < singularBeta)
@@ -956,7 +957,7 @@ moves_loop: // When in check, search starts from here
           // search without the ttMove. So we assume this expected Cut-node is not singular,
           // that is multiple moves fail high, and we can prune the whole subtree by returning
           // the hard beta bound.
-          else if (cutNode && singularBeta > beta)
+          else if (multiCut)
               return beta;
       }
       else if (    givesCheck // Check extension (~2 Elo)
