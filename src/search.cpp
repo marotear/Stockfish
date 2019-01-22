@@ -954,7 +954,12 @@ moves_loop: // When in check, search starts from here
           // that is multiple moves fail high, and we can prune the whole subtree by returning
           // the hard beta bound.
           else if (cutNode && singularBeta > beta)
+          {
+              if (!pos.capture_or_promotion(ttMove))
+                  update_quiet_stats(pos, ss, ttMove, nullptr, 0, stat_bonus(depth));
+
               return beta;
+          }
       }
       else if (    givesCheck // Check extension (~2 Elo)
                &&  pos.see_ge(move))
