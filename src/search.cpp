@@ -73,10 +73,10 @@ namespace {
 
   // Futility and reductions lookup tables, initialized at startup
   int FutilityMoveCounts[2][16]; // [improving][depth]
-  int Reductions[2][2][64][64];  // [pv][improving][depth][moveNumber]
+  int Reductions[2][2][2][64][64];  // [pv][pvHit][improving][depth][moveNumber]
 
-  template <bool PvNode> Depth reduction(bool i, Depth d, int mn) {
-    return Reductions[PvNode][i][std::min(d / ONE_PLY, 63)][std::min(mn, 63)] * ONE_PLY;
+  template <bool PvNode> Depth reduction(bool i, Depth d, int mn, bool pvHit) {
+    return Reductions[PvNode][pvHit][i][std::min(d / ONE_PLY, 63)][std::min(mn, 63)] * ONE_PLY;
   }
 
   // History and stats update bonus, based on depth
@@ -159,16 +159,17 @@ void Search::init() {
   for (int imp = 0; imp <= 1; ++imp)
       for (int d = 1; d < 64; ++d)
           for (int mc = 1; mc < 64; ++mc)
-          {
-              double r = log(d) * log(mc) / 1.95;
+              for (int pvHit = 0; pvHit <= 1; ++pvHit)
+              {
+                  double r = std::max(log(d) * log(mc) / 1.95 - pvHit, 0.0);
 
-              Reductions[NonPV][imp][d][mc] = int(std::round(r));
-              Reductions[PV][imp][d][mc] = std::max(Reductions[NonPV][imp][d][mc] - 1, 0);
+                  Reductions[NonPV][pvHit][imp][d][mc] = int(std::round(r));
+                  Reductions[PV][pvHit][imp][d][mc] = std::max(Reductions[NonPV][pvHit][imp][d][mc] - 1, 0);
 
-              // Increase reduction for non-PV nodes when eval is not improving
-              if (!imp && r > 1.0)
-                Reductions[NonPV][imp][d][mc]++;
-          }
+                  // Increase reduction for non-PV nodes when eval is not improving
+                  if (!imp && r > 1.0)
+                    Reductions[NonPV][pvHit][imp][d][mc]++;
+              }
 
   for (int d = 0; d < 16; ++d)
   {
@@ -984,7 +985,7 @@ moves_loop: // When in check, search starts from here
               }
 
               // Reduced depth of the next LMR search
-              int lmrDepth = std::max(newDepth - reduction<PvNode>(improving, depth, moveCount), DEPTH_ZERO) / ONE_PLY;
+              int lmrDepth = std::max(newDepth - reduction<PvNode>(improving, depth, moveCount, pvHit), DEPTH_ZERO) / ONE_PLY;
 
               // Countermoves based pruning (~20 Elo)
               if (   lmrDepth < 3 + ((ss-1)->statScore > 0 || (ss-1)->moveCount == 1)
@@ -1030,11 +1031,7 @@ moves_loop: // When in check, search starts from here
           &&  moveCount > 1
           && (!captureOrPromotion || moveCountPruning))
       {
-          Depth r = reduction<PvNode>(improving, depth, moveCount);
-
-          // Decrease reduction if position is or has been on the PV
-          if (pvHit)
-              r -= ONE_PLY;
+          Depth r = reduction<PvNode>(improving, depth, moveCount, pvHit);
 
           // Decrease reduction if opponent's move count is high (~10 Elo)
           if ((ss-1)->moveCount > 15)
