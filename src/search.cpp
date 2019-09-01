@@ -70,9 +70,18 @@ namespace {
   // Reductions lookup table, initialized at startup
   int Reductions[MAX_MOVES]; // [depth or moveNumber]
 
-  Depth reduction(bool i, Depth d, int mn) {
+  constexpr int R_ONE_PLY = 1024;
+  constexpr int r_arr[11] = {
+       1032, 1012, 2009, 983,
+       975, 1056, 2040, 2088,
+       1065, 1025, 1043
+  };
+
+  constexpr int red_const = 511;
+
+  int reduction(bool i, Depth d, int mn) {
     int r = Reductions[d / ONE_PLY] * Reductions[mn];
-    return ((r + 520) / 1024 + (!i && r > 999)) * ONE_PLY;
+    return (r + red_const) + (!i && r > 999) * r_arr[0];
   }
 
   constexpr int futility_move_count(bool improving, int depth) {
@@ -1031,7 +1040,7 @@ moves_loop: // When in check, search starts from here
                   continue;
 
               // Reduced depth of the next LMR search
-              int lmrDepth = std::max(newDepth - reduction(improving, depth, moveCount), DEPTH_ZERO);
+              int lmrDepth = std::max(newDepth - (reduction(improving, depth, moveCount) / R_ONE_PLY) * ONE_PLY, DEPTH_ZERO);
               lmrDepth /= ONE_PLY;
 
               // Countermoves based pruning (~20 Elo)
@@ -1082,39 +1091,39 @@ moves_loop: // When in check, search starts from here
               || ss->staticEval + PieceValue[EG][pos.captured_piece()] <= alpha
               || cutNode))
       {
-          Depth r = reduction(improving, depth, moveCount);
+          int r = reduction(improving, depth, moveCount);
 
           // Reduction if other threads are searching this position.
           if (th.marked())
-              r += ONE_PLY;
+              r += r_arr[1];
 
           // Decrease reduction if position is or has been on the PV
           if (ttPv)
-              r -= 2 * ONE_PLY;
+              r -= r_arr[2];
 
           // Decrease reduction if opponent's move count is high (~10 Elo)
           if ((ss-1)->moveCount > 15)
-              r -= ONE_PLY;
+              r -= r_arr[3];
 
           // Decrease reduction if move has been singularly extended
-          r -= singularLMR * ONE_PLY;
+          r -= singularLMR * r_arr[4];
 
           if (!captureOrPromotion)
           {
               // Increase reduction if ttMove is a capture (~0 Elo)
               if (ttCapture)
-                  r += ONE_PLY;
+                  r += r_arr[5];
 
               // Increase reduction for cut nodes (~5 Elo)
               if (cutNode)
-                  r += 2 * ONE_PLY;
+                  r += r_arr[6];
 
               // Decrease reduction for moves that escape a capture. Filter out
               // castling moves, because they are coded as "king captures rook" and
               // hence break make_move(). (~5 Elo)
               else if (    type_of(move) == NORMAL
                        && !pos.see_ge(make_move(to_sq(move), from_sq(move))))
-                  r -= 2 * ONE_PLY;
+                  r -= r_arr[7];
 
               ss->statScore =  thisThread->mainHistory[us][from_to(move)]
                              + (*contHist[0])[movedPiece][to_sq(move)]
@@ -1131,16 +1140,16 @@ moves_loop: // When in check, search starts from here
 
               // Decrease/increase reduction by comparing opponent's stat score (~10 Elo)
               if (ss->statScore >= -99 && (ss-1)->statScore < -116)
-                  r -= ONE_PLY;
+                  r -= r_arr[8];
 
               else if ((ss-1)->statScore >= -117 && ss->statScore < -144)
-                  r += ONE_PLY;
+                  r += r_arr[9];
 
               // Decrease/increase reduction for moves with a good/bad history (~30 Elo)
-              r -= ss->statScore / 16384 * ONE_PLY;
+              r -= (ss->statScore / 16384) * R_ONE_PLY;
           }
 
-          Depth d = clamp(newDepth - r, ONE_PLY, newDepth);
+          Depth d = clamp(newDepth - (r / R_ONE_PLY) * ONE_PLY, ONE_PLY, newDepth);
 
           value = -search<NonPV>(pos, ss+1, -(alpha+1), -alpha, d, true);
 
