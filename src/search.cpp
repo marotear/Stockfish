@@ -1140,11 +1140,11 @@ moves_loop: // When in check, search starts from here
               r -= ss->statScore / 16384 * ONE_PLY;
           }
 
-          Depth d = clamp(newDepth - r, ONE_PLY, newDepth);
+          Depth d = clamp(newDepth - r, ONE_PLY, newDepth - ONE_PLY);
 
           value = -search<NonPV>(pos, ss+1, -(alpha+1), -alpha, d, true);
 
-          doFullDepthSearch = (value > alpha && d != newDepth), doLMR = true;
+          doFullDepthSearch = (value > alpha), doLMR = true;
       }
       else
           doFullDepthSearch = !PvNode || moveCount > 1, doLMR = false;
