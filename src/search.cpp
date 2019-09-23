@@ -146,7 +146,12 @@ namespace {
   };
 
   template <NodeType NT>
-  Value search(Position& pos, Stack* ss, Value alpha, Value beta, Depth depth, bool cutNode);
+  Value search(Position& pos, Stack* ss, Value alpha, Value beta, Depth depth, bool cutNode, bool inLmr);
+
+  template <NodeType NT>
+  inline Value search(Position& pos, Stack* ss, Value alpha, Value beta, Depth depth, bool cutNode) {
+      return search<NT>(pos, ss, alpha, beta, depth, cutNode, false);
+  }
 
   template <NodeType NT>
   Value qsearch(Position& pos, Stack* ss, Value alpha, Value beta, Depth depth = DEPTH_ZERO);
@@ -562,7 +567,7 @@ namespace {
   // search<>() is the main search function for both PV and non-PV nodes
 
   template <NodeType NT>
-  Value search(Position& pos, Stack* ss, Value alpha, Value beta, Depth depth, bool cutNode) {
+  Value search(Position& pos, Stack* ss, Value alpha, Value beta, Depth depth, bool cutNode, bool inLmr) {
 
     constexpr bool PvNode = NT == PV;
     const bool rootNode = PvNode && ss->ply == 0;
@@ -1031,7 +1036,7 @@ moves_loop: // When in check, search starts from here
                   continue;
 
               // Reduced depth of the next LMR search
-              int lmrDepth = std::max(newDepth - reduction(improving, depth, moveCount), DEPTH_ZERO);
+              int lmrDepth = std::max(newDepth - reduction(improving, depth, moveCount) - inLmr * ONE_PLY, DEPTH_ZERO);
               lmrDepth /= ONE_PLY;
 
               // Countermoves based pruning (~20 Elo)
@@ -1109,6 +1114,9 @@ moves_loop: // When in check, search starts from here
               if (cutNode)
                   r += 2 * ONE_PLY;
 
+              if (inLmr)
+                  r += ONE_PLY;
+
               // Decrease reduction for moves that escape a capture. Filter out
               // castling moves, because they are coded as "king captures rook" and
               // hence break make_move(). (~5 Elo)
@@ -1142,7 +1150,9 @@ moves_loop: // When in check, search starts from here
 
           Depth d = clamp(newDepth - r, ONE_PLY, newDepth);
 
-          value = -search<NonPV>(pos, ss+1, -(alpha+1), -alpha, d, true);
+          bool inLmr2 = d != newDepth;
+
+          value = -search<NonPV>(pos, ss+1, -(alpha+1), -alpha, d, true, inLmr2);
 
           doFullDepthSearch = (value > alpha && d != newDepth), doLMR = true;
       }
