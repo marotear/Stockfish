@@ -1147,6 +1147,9 @@ moves_loop: // When in check, search starts from here
 
           value = -search<NonPV>(pos, ss+1, -(alpha+1), -alpha, d, true);
 
+          if (value > alpha && ss->statScore < 0)
+              ss->statScore = 0;
+
           doFullDepthSearch = (value > alpha && d != newDepth), doLMR = true;
       }
       else
