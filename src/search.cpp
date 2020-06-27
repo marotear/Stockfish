@@ -1220,10 +1220,11 @@ moves_loop: // When in check, search starts from here
           }
 
           Depth d = Utility::clamp(newDepth - r, 1, newDepth);
+          Value alpha2 = d < 3 ? std::max(alpha-2,-VALUE_INFINITE) : alpha;
 
-          value = -search<NonPV>(pos, ss+1, -(alpha+1), -alpha, d, true);
+          value = -search<NonPV>(pos, ss+1, -(alpha2+1), -alpha2, d, true);
 
-          doFullDepthSearch = value > alpha && d != newDepth;
+          doFullDepthSearch = value > alpha2 && d != newDepth;
 
           didLMR = true;
       }
