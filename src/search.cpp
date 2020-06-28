@@ -1223,6 +1223,12 @@ moves_loop: // When in check, search starts from here
 
           value = -search<NonPV>(pos, ss+1, -(alpha+1), -alpha, d, true);
 
+          if (value > alpha && d < newDepth / 2)
+          {
+              d = 1 + newDepth / 2;
+              value = -search<NonPV>(pos, ss+1, -(alpha+1), -alpha, d, true);
+          }
+
           doFullDepthSearch = value > alpha && d != newDepth;
 
           didLMR = true;
