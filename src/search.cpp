@@ -939,7 +939,17 @@ namespace {
             }
     }
 
-    // Step 11. If the position is not in TT, decrease depth by 2
+    // Step 11. Internal iterative deepening
+    if (depth >= 6 && !ttHit)
+    {
+        search<NT>(pos, ss, alpha, beta, depth - 5, cutNode);
+
+        tte = TT.probe(posKey, ttHit);
+        ttValue = ttHit ? value_from_tt(tte->value(), ss->ply, pos.rule50_count()) : VALUE_NONE;
+        ttMove = ttHit ? tte->move() : MOVE_NONE;
+    }
+
+    // Step 12. If the position is not in TT, decrease depth by 2
     if (   PvNode
         && depth >= 6
         && !ttMove)
