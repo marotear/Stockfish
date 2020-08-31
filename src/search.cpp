@@ -672,7 +672,7 @@ namespace {
         ss->ttPv = PvNode || (ttHit && tte->is_pv());
     formerPv = ss->ttPv && !PvNode;
 
-    if (   ss->ttPv
+    if (   (PvNode || ss->ttPv)
         && depth > 12
         && ss->ply - 1 < MAX_LPH
         && !priorCapture
@@ -750,7 +750,7 @@ namespace {
                 if (    b == BOUND_EXACT
                     || (b == BOUND_LOWER ? value >= beta : value <= alpha))
                 {
-                    tte->save(posKey, value_to_tt(value, ss->ply), ss->ttPv, b,
+                    tte->save(posKey, value_to_tt(value, ss->ply), (PvNode || ss->ttPv), b,
                               std::min(MAX_PLY - 1, depth + 6),
                               MOVE_NONE, VALUE_NONE);
 
@@ -800,7 +800,7 @@ namespace {
         else
             ss->staticEval = eval = -(ss-1)->staticEval + 2 * Tempo;
 
-        tte->save(posKey, VALUE_NONE, ss->ttPv, BOUND_NONE, DEPTH_NONE, MOVE_NONE, eval);
+        tte->save(posKey, VALUE_NONE, (PvNode || ss->ttPv), BOUND_NONE, DEPTH_NONE, MOVE_NONE, eval);
     }
 
     // Step 7. Razoring (~1 Elo)
@@ -1088,6 +1088,7 @@ moves_loop: // When in check, search starts from here
       {
           Value singularBeta = ttValue - ((formerPv + 4) * depth) / 2;
           Depth singularDepth = (depth - 1 + 3 * formerPv) / 2;
+          bool ttPv = ss->ttPv;
           ss->excludedMove = move;
           value = search<NonPV>(pos, ss, singularBeta - 1, singularBeta, singularDepth, cutNode);
           ss->excludedMove = MOVE_NONE;
@@ -1117,6 +1118,8 @@ moves_loop: // When in check, search starts from here
               if (value >= beta)
                   return beta;
           }
+
+          ss->ttPv = ttPv;
       }
 
       // Check extension (~2 Elo)
@@ -1185,7 +1188,7 @@ moves_loop: // When in check, search starts from here
               r++;
 
           // Decrease reduction if position is or has been on the PV (~10 Elo)
-          if (ss->ttPv)
+          if (PvNode || ss->ttPv)
               r -= 2;
 
           if (moveCountPruning && !formerPv)
@@ -1214,7 +1217,7 @@ moves_loop: // When in check, search starts from here
               // hence break make_move(). (~2 Elo)
               else if (    type_of(move) == NORMAL
                        && !pos.see_ge(reverse_move(move)))
-                  r -= 2 + ss->ttPv - (type_of(movedPiece) == PAWN);
+                  r -= 2 + (PvNode || ss->ttPv) - (type_of(movedPiece) == PAWN);
 
               ss->statScore =  thisThread->mainHistory[us][from_to(move)]
                              + (*contHist[0])[movedPiece][to_sq(move)]
@@ -1394,15 +1397,15 @@ moves_loop: // When in check, search starts from here
 
     // If no good move is found and the previous position was ttPv, then the previous
     // opponent move is probably good and the new position is added to the search tree.
-    if (bestValue <= alpha)
+    if (!PvNode && bestValue <= alpha)
         ss->ttPv = ss->ttPv || ((ss-1)->ttPv && depth > 3);
     // Otherwise, a counter move has been found and if the position is the last leaf
     // in the search tree, remove the position from the search tree.
-    else if (depth > 3)
+    else if (!PvNode && depth > 3)
         ss->ttPv = ss->ttPv && (ss+1)->ttPv;
 
     if (!excludedMove && !(rootNode && thisThread->pvIdx))
-        tte->save(posKey, value_to_tt(bestValue, ss->ply), ss->ttPv,
+        tte->save(posKey, value_to_tt(bestValue, ss->ply), (PvNode || ss->ttPv),
                   bestValue >= beta ? BOUND_LOWER :
                   PvNode && bestMove ? BOUND_EXACT : BOUND_UPPER,
                   depth, bestMove, ss->staticEval);
