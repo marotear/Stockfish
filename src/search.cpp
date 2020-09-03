@@ -939,10 +939,13 @@ namespace {
                         tte->save(posKey, value_to_tt(value, ss->ply), ttPv,
                             BOUND_LOWER,
                             depth - 3, move, ss->staticEval);
-                    return value;
+                    {
+                        ss->ttPv = ttPv;
+                        return value;
+                    }
                 }
             }
-         ss->ttPv = ttPv;
+        ss->ttPv = ttPv;
     }
 
     // Step 11. If the position is not in TT, decrease depth by 2
@@ -1184,6 +1187,7 @@ moves_loop: // When in check, search starts from here
               r++;
 
           // Decrease reduction if position is or has been on the PV (~10 Elo)
+          // assert(PvNode && !ss->ttPv);
           if (ss->ttPv)
               r -= 2;
 
@@ -1391,14 +1395,17 @@ moves_loop: // When in check, search starts from here
     if (PvNode)
         bestValue = std::min(bestValue, maxValue);
 
-    // If no good move is found and the previous position was ttPv, then the previous
-    // opponent move is probably good and the new position is added to the search tree.
-    if (bestValue <= alpha)
-        ss->ttPv = ss->ttPv || ((ss-1)->ttPv && depth > 3);
-    // Otherwise, a counter move has been found and if the position is the last leaf
-    // in the search tree, remove the position from the search tree.
-    else if (depth > 3)
-        ss->ttPv = ss->ttPv && (ss+1)->ttPv;
+    if (!excludedMove)
+    {
+        // If no good move is found and the previous position was ttPv, then the previous
+        // opponent move is probably good and the new position is added to the search tree.
+        if (bestValue <= alpha)
+            ss->ttPv = ss->ttPv || ((ss-1)->ttPv && depth > 3);
+        // Otherwise, a counter move has been found and if the position is the last leaf
+        // in the search tree, remove the position from the search tree.
+        else if (depth > 3)
+            ss->ttPv = ss->ttPv && (ss+1)->ttPv;
+    }
 
     if (!excludedMove && !(rootNode && thisThread->pvIdx))
         tte->save(posKey, value_to_tt(bestValue, ss->ply), ss->ttPv,
