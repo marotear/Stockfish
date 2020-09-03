@@ -1184,8 +1184,8 @@ moves_loop: // When in check, search starts from here
               r++;
 
           // Decrease reduction if position is or has been on the PV (~10 Elo)
-          if (ss->ttPv)
-              r -= 2;
+          if (PvNode || ss->ttPv)
+              r -= 1 + (PvNode ? !bestMove : (ss-1)->ttPv);
 
           if (moveCountPruning && !formerPv)
               r++;
